@@ -38,11 +38,8 @@ def send(messages: list[dict[str, any]]) -> str:
         message = dict(
             role=r.role,
             content=r.content,
-            tool_calls=[dict(
-                id=t.id,
-                type=t.type,
-                function=dict(name=t.function.name,arguments=t.function.arguments)
-            ) for t in r.tool_calls if t.function])
+            tool_calls=[dict(id=t.id, type=t.type, function=dict(name=t.function.name, arguments=t.function.arguments)
+                             ) for t in r.tool_calls if t.function])
         messages.append(message)
         for t in r.tool_calls:
             if t.function.name == 'kubectl':
@@ -52,20 +49,17 @@ def send(messages: list[dict[str, any]]) -> str:
         return send(messages)
     return r.content.strip()
 
+
 def main():
     print("Interactive Kubernetes Chat. Type 'exit' to quit.")
     messages = [{'role': 'system', 'content': 'You are a Kubernetes expert ready to help'}]
     while True:
-        user_input = input("You: ")
+        user_input = input("👤 You: ")
         if user_input.lower() == 'exit':
-            print("Goodbye!")
             break
-        messages.append({
-            "role": "user",
-            "content": user_input,
-        })
+        messages.append(dict(role="user", content=user_input))
         response = send(messages)
-        print(f"AI: {response}\n----------")
+        print(f"🤖 AI: {response}\n----------")
 
 
 if __name__ == "__main__":

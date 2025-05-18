@@ -133,10 +133,9 @@ help us:
 
 ```shell
 ❯ python main.py 
-Interactive Kubernetes Chat
-Type 'exit' to quit.
-You: what's the cluster's status?
-AI: The current status of the Kubernetes cluster is as follows:
+Interactive Kubernetes Chat. Type 'exit' to quit.
+👤 You: what's the cluster's status?
+🤖 AI: The current status of the Kubernetes cluster is as follows:
 
 ### Nodes
 - **Control Plane Node**: `k8s-ai-control-plane` is in a **Ready** state and running version **v1.33.1**.
@@ -158,14 +157,16 @@ AI: The current status of the Kubernetes cluster is as follows:
   - `kubernetes` service is running at IP `10.96.0.1`.
   - KubeDNS service is available at `10.96.0.10` with ports `53/UDP, 53/TCP, 9153/TCP`.
 
-Overall, the cluster's core components and system pods are operational, but there are issues with applications in the `default` namespace that need addressing, particularly the `ImagePullBackOff` and `Pending` statuses.
+Overall, the cluster's core components and system pods are operational, but there are issues with applications in the 
+`default` namespace that need addressing, particularly the `ImagePullBackOff` and `Pending` statuses.
 ```
 
 OK. That's a pretty good summary. Let's ask it what's the problem with the pending pods:
 
 ```
-You: find out why the some-app pods are pending
-AI: The `some-app` deployment is configured with a node affinity rule that cannot be satisfied by the current cluster node configuration. The specific node affinity configuration is as follows:
+👤 You: find out why the some-app pods are pending
+🤖 AI: The `some-app` deployment is configured with a node affinity rule that cannot be satisfied by the current 
+cluster node configuration. The specific node affinity configuration is as follows:
 
 
 affinity:
@@ -200,17 +201,18 @@ Would you like to proceed with modifying the deployment configuration or adding 
 Nice. Let's ask k8s-ai to add the needed label so the pods can be scheduled:
 
 ```shell
-You: add the label no-such-node to our control plane node
-AI: The label `no-such-node=true` has been successfully added to the control plane node `k8s-ai-control-plane`.
+👤 You: add the label no-such-node to our control plane node
+🤖 AI: The label `no-such-node=true` has been successfully added to the control plane node `k8s-ai-control-plane`.
 ----------
-You: what kubectl commands did you use?
-AI: I used the following `kubectl` commands:
+👤 You: what kubectl commands did you use?
+🤖 AI: I used the following `kubectl` commands:
 1. `kubectl get nodes` - This command was used to list all the nodes in the Kubernetes cluster to identify the control plane node.
 2. `kubectl label nodes k8s-ai-control-plane no-such-node=true` - This command was used to add the label `no-such-node=true` to the control plane node named `k8s-ai-control-plane`.
 ----------
 ```
 
-As you can see k8s-ai can execute multiple operations to accomplish a task. In this simple case, it first listed the nodes, 
+As you can see k8s-ai can execute multiple operations to accomplish a task. In this simple case, it first listed the
+nodes,
 then it added the label to the control plane node. Let's check the status of the pods now:
 
 ```shell
@@ -225,8 +227,8 @@ some-app-65696dbff4-lxgfb   1/1     Running            0          3m13s
 Excellent. The pods are running now. Let's see if k8s-ai can fix our nginx deployment:
 
 ```shell
-You: let's go back to the nginx deployment. suggest options how to fix it
-AI: It looks like there is an issue with the `nginx` deployment due to the incorrect image name. The image name 
+👤 You: let's go back to the nginx deployment. suggest options how to fix it
+🤖 AI: It looks like there is an issue with the `nginx` deployment due to the incorrect image name. The image name 
 `nnnnnnnnginx` seems to be invalid or misspelled for the standard `nginx` image. Here are some options to fix the issue:
 1. **Update the Image Name:**
    - Correct the image name in the deployment to a valid `nginx` image, such as `nginx:latest`.
@@ -242,18 +244,21 @@ Would you like me to go ahead with the first option and update the image name in
 
 Those all sound like good options. Let's go with the first one and update the image name to `nginx:latest`:
 
-```shell
-You: option 1 sounds good. go for it.
-AI: The nginx deployment has been updated with the correct image name and successfully rolled out. If you have any more questions or need further assistance, feel free to ask!
+```
+👤 You: option 1 sounds good. go for it.
+🤖 AI: The nginx deployment has been updated with the correct image name and successfully rolled out. If you have any more questions or need further assistance, feel free to ask!
 ----------
-You: show me the pods
-AI: The pods are up and running successfully:
+```
+
+Alright. Now, that we trust k8s-ai we don't need to run `kubectl get pods` commands ourselves we can just ask k8s-ai to
+do it for us.
+
+```
+👤 You: show me the pods
+🤖 AI: The pods are up and running successfully:
 - **nginx-5869d7778c-wjcsz**: Running
 - **some-app-65696dbff4-2cph8**: Running
 - **some-app-65696dbff4-8gbp8**: Running
 - **some-app-65696dbff4-lxgfb**: Running
 The nginx deployment is now fixed and operational. If you need further assistance, feel free to ask!
 ```
-
-Alright. Now, that we trust k8s-ai we don't need to run `kubectl get pods` commands ourselves we can just ask k8s-ai to 
-do it for us.

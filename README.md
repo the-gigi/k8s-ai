@@ -133,7 +133,8 @@ help us:
 
 ```shell
 ❯ python main.py 
-Interactive Kubernetes Chat. Type 'exit' to quit.
+☸️ Interactive Kubernetes Chat. Type 'exit' to quit.
+----------------------------------------------------
 👤 You: what's the cluster's status?
 🤖 AI: The current status of the Kubernetes cluster is as follows:
 

@@ -19,7 +19,7 @@ pip install -r requirements.txt
 
 # Usage
 
-Just tun the thing and make your kube context points to the right cluster:
+Just tun the thing and make sure your kube context points to the right cluster:
 
 ```shell
 python main.py

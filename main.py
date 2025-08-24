@@ -1,5 +1,7 @@
+import argparse
 import json
 import os
+import sys
 
 import sh
 from openai import OpenAI
@@ -27,6 +29,8 @@ tools = [{
     },
 }]
 
+k8s_context = None
+
 
 def send(messages: list[dict[str, any]]) -> str:
     response = client.chat.completions.create(
@@ -42,6 +46,8 @@ def send(messages: list[dict[str, any]]) -> str:
         for t in r.tool_calls:
             if t.function.name == 'kubectl':
                 cmd = json.loads(t.function.arguments)['cmd'].split()
+                if k8s_context:
+                    cmd = ['--context', k8s_context] + cmd
                 result = sh.kubectl(cmd)
                 messages.append(dict(tool_call_id=t.id, role="tool", name=t.function.name, content=result))
         return send(messages)
@@ -49,7 +55,21 @@ def send(messages: list[dict[str, any]]) -> str:
 
 
 def main():
-    print("☸️ Interactive Kubernetes Chat. Type 'exit' to quit.\n" + "-" * 52)
+    global k8s_context
+    
+    parser = argparse.ArgumentParser(description='Interactive Kubernetes Chat')
+    parser.add_argument('--context', '-c', help='Kubernetes context to use')
+    args = parser.parse_args()
+    
+    k8s_context = args.context
+    
+    if not k8s_context:
+        print("Error: Kubernetes context is required!")
+        print("Usage: python main.py --context <kube context>")
+        sys.exit(1)
+
+    msg = f"☸️ Interactive Kubernetes Chat (using context: {k8s_context}). Type 'exit' to quit."
+    print(f"{msg}\n{'-' * len(msg)}")
     messages = [{'role': 'system', 'content': 'You are a Kubernetes expert ready to help'}]
     while (user_input := input("👤 You: ")).lower() != 'exit':
         messages.append(dict(role="user", content=user_input))

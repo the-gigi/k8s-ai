@@ -4,25 +4,23 @@ OpenAI chatbot with kubectl access. You run it and you interact with your Kubern
 
 # Setup
 
-## Create virtual environment and activate it
+## Install dependencies with uv
 
 ```shell
-python -m venv venv
-source venv/bin/activate
-```
-
-## Install dependencies
-
-```
-pip install -r requirements.txt
+uv sync
 ```
 
 # Usage
 
-Just run the thing and make sure your kube context points to the right cluster:
+Run the script with your Kubernetes context:
 
 ```shell
-python main.py
+uv run python main.py --context <your-kube-context>
+```
+
+For example, if using a kind cluster called `kind-k8s-ai`:
+```shell
+uv run python main.py --context kind-k8s-ai
 ```
 
 # k8s-ai in Action
@@ -77,7 +75,8 @@ spec:
       containers:
         - name: pause
           image: registry.k8s.io/pause:3.9
-' | kubectl apply -f -
+' | kubectl apply -f - 
+
 deployment.apps/some-app created
 ```
 
@@ -132,9 +131,9 @@ So, we have two deployments, one of them has Three pending pods and the other on
 help us:
 
 ```shell
-❯ python main.py 
-☸️ Interactive Kubernetes Chat. Type 'exit' to quit.
-----------------------------------------------------
+❯ uv run python main.py --context kind-k8s-ai
+☸️ Interactive Kubernetes Chat (using context: kind-k8s-ai). Type 'exit' to quit.
+---------------------------------------------------------------------------------
 👤 You: what's the cluster's status?
 🤖 AI: The current status of the Kubernetes cluster is as follows:
 

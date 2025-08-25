@@ -1,8 +1,14 @@
 [project]
 name = "k8s-ai"
 version = "0.1.0"
-requires-python = ">=3.8"
+requires-python = ">=3.10"
 dependencies = [
     "openai",
     "sh",
+    "a2a-sdk[http-server]",
+    "uvicorn",
 ]
+
+[project.scripts]
+k8s-ai-cli = "k8s_ai.cli.main:main"
+k8s-ai-server = "k8s_ai.server.main:main"

@@ -1,6 +1,13 @@
 # k8s-ai
 
-OpenAI chatbot with kubectl access. You run it and you interact with your Kubernetes clusters in natural language.
+Kubernetes AI assistant with kubectl access. You can run it as an interactive CLI chatbot or as an [A2A (Agent-to-Agent)](https://a2a-protocol.org/) server to interact with your Kubernetes clusters in natural language.
+
+## Features
+
+- 🤖 **Interactive CLI**: Chat directly with your Kubernetes clusters
+- 🌐 **A2A Server**: Expose kubectl capabilities as an A2A agent for other AI systems
+- ⚡ **Smart kubectl execution**: Automatically runs kubectl commands based on natural language requests
+- 🔧 **Context-aware**: Works with any Kubernetes context
 
 # Setup
 
@@ -12,15 +19,110 @@ uv sync
 
 # Usage
 
-Run the script with your Kubernetes context:
+## CLI Mode (Interactive Chat)
+
+Run as an interactive command-line tool:
 
 ```shell
+# Using uv
+uv run k8s-ai-cli --context <your-kube-context>
+
+# Or using the old main.py for backward compatibility
 uv run python main.py --context <your-kube-context>
 ```
 
-For example, if using a kind cluster called `kind-k8s-ai`:
+Example with a kind cluster:
 ```shell
-uv run python main.py --context kind-k8s-ai
+uv run k8s-ai-cli --context kind-k8s-ai
+```
+
+## A2A Server Mode
+
+Run as an A2A server to expose kubectl capabilities to other AI agents:
+
+```shell
+uv run k8s-ai-server --context <your-kube-context> [--host 0.0.0.0] [--port 9999]
+```
+
+Example:
+```shell
+# Start A2A server on default port 9999
+uv run k8s-ai-server --context kind-k8s-ai
+
+# Start on custom host/port
+uv run k8s-ai-server --context kind-k8s-ai --host localhost --port 8080
+```
+
+Server output:
+```
+(k8s-ai) gigi@_mbsetupuser-GNWH9N6CN9 k8s-ai % python -m k8s_ai.server.main --context kind-k8s-ai
+🚀 Starting k8s-ai A2A server on 0.0.0.0:9999
+☸️ Using Kubernetes context: kind-k8s-ai
+🌐 Agent card available at: http://0.0.0.0:9999/.well-known/agent.json
+INFO:     Started server process [76492]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://0.0.0.0:9999 (Press CTRL+C to quit)
+```
+
+### A2A Server Features
+
+- **Agent Card**: Available at `/.well-known/agent.json`
+- **Kubectl Operations**: Execute kubectl commands via A2A protocol
+- **Streaming Support**: Real-time response streaming
+- **Context Isolation**: Each server instance works with a specific Kubernetes context
+
+### A2A Client Example
+
+Using the A2A Python client:
+```bash
+# Test with the included script
+uv run python test_a2a_client.py
+```
+
+Or using direct HTTP requests (JSON-RPC):
+```python
+import requests
+import json
+
+payload = {
+    "jsonrpc": "2.0",
+    "id": "test-1", 
+    "method": "message/send",
+    "params": {
+        "message": {
+            "role": "user",
+            "message_id": "msg-1",
+            "parts": [{"kind": "text", "text": "show me all pods"}]
+        }
+    }
+}
+
+response = requests.post('http://localhost:9999/', json=payload).json()
+print(response['result']['parts'][0]['text'])
+```
+
+Example output:
+```
+Here are the current pods in the cluster:
+
+1. **some-app-65696dbff4-kxwvf**: 
+   - Ready: 0/1
+   - Status: Pending
+   - Restarts: 0
+   - Age: 108 minutes
+
+2. **some-app-65696dbff4-mj44r**:
+   - Ready: 0/1
+   - Status: Pending
+   - Restarts: 0
+   - Age: 108 minutes
+
+3. **some-app-65696dbff4-qjc6l**:
+   - Ready: 0/1
+   - Status: Pending
+   - Restarts: 0
+   - Age: 108 minutes
 ```
 
 # k8s-ai in Action
@@ -131,7 +233,7 @@ So, we have two deployments, one of them has Three pending pods and the other on
 help us:
 
 ```shell
-❯ uv run python main.py --context kind-k8s-ai
+❯ uv run k8s-ai-cli --context kind-k8s-ai
 ☸️ Interactive Kubernetes Chat (using context: kind-k8s-ai). Type 'exit' to quit.
 ---------------------------------------------------------------------------------
 👤 You: what's the cluster's status?

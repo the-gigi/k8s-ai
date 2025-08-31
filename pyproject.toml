@@ -12,3 +12,6 @@ dependencies = [
 [project.scripts]
 k8s-ai-cli = "k8s_ai.cli.main:main"
 k8s-ai-server = "k8s_ai.server.main:main"
+
+[tool.uv]
+package = true

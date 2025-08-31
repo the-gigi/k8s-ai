@@ -46,44 +46,134 @@ uv run k8s-ai-server --context <your-kube-context> [--host 0.0.0.0] [--port 9999
 
 Example:
 ```shell
-# Start A2A server on default port 9999
+# Start A2A server on default port 9999 (without authentication)
 uv run k8s-ai-server --context kind-k8s-ai
 
 # Start on custom host/port
 uv run k8s-ai-server --context kind-k8s-ai --host localhost --port 8080
 ```
 
-Server output:
+### 🔐 Authentication
+
+The A2A server supports API key authentication for secure access:
+
+#### Generate API Keys
+```shell
+# Generate a new API key for a client
+uv run k8s-ai-server --context kind-k8s-ai --generate-key --client-name "dashboard-client"
+# Output: 🔑 Generated API Key for 'dashboard-client': sk-k8sai-dashboard-abc123xyz
+
+# Generate key without client name
+uv run k8s-ai-server --context kind-k8s-ai --generate-key
 ```
-(k8s-ai) gigi@_mbsetupuser-GNWH9N6CN9 k8s-ai % python -m k8s_ai.server.main --context kind-k8s-ai
+
+#### Manage API Keys
+```shell
+# List all active API keys
+uv run k8s-ai-server --list-keys
+
+# Revoke a specific API key
+uv run k8s-ai-server --revoke-key sk-k8sai-dashboard-abc123xyz
+```
+
+#### Start Server with Authentication
+```shell
+# Server with generated keys (reads from keys.json)
+uv run k8s-ai-server --context kind-k8s-ai
+
+# Server with single API key
+uv run k8s-ai-server --context kind-k8s-ai --auth-key "my-secret-key"
+
+# Server with environment variable
+export K8S_AI_AUTH_KEYS="key1,key2,key3"
+uv run k8s-ai-server --context kind-k8s-ai
+
+# Custom keys file location
+uv run k8s-ai-server --context kind-k8s-ai --keys-file /path/to/my-keys.json
+```
+
+#### Server Output Examples
+
+**Without Authentication:**
+```
+🚀 Starting k8s-ai A2A server on 0.0.0.0:9999
+☸️ Using Kubernetes context: kind-k8s-ai
+⚠️  No authentication configured. Server will run without authentication!
+   Use --auth-key <key> or --generate-key to enable authentication.
+🌐 Agent card available at: http://0.0.0.0:9999/.well-known/agent.json
+```
+
+**With Authentication:**
+```
+🔒 Authentication enabled with 2 API key(s)
 🚀 Starting k8s-ai A2A server on 0.0.0.0:9999
 ☸️ Using Kubernetes context: kind-k8s-ai
 🌐 Agent card available at: http://0.0.0.0:9999/.well-known/agent.json
-INFO:     Started server process [76492]
-INFO:     Waiting for application startup.
-INFO:     Application startup complete.
-INFO:     Uvicorn running on http://0.0.0.0:9999 (Press CTRL+C to quit)
+```
+
+**Key Generation:**
+```
+🔑 Generated API Key for 'dashboard-client': sk-k8sai-dashboard-FkL9mN2pQ3rS
+⚠️  Save this key - it won't be displayed again!
 ```
 
 ### A2A Server Features
 
-- **Agent Card**: Available at `/.well-known/agent.json`
+- **Agent Card**: Available at `/.well-known/agent.json` (no authentication required)
+- **API Key Authentication**: Secure access with Bearer token authentication
+- **Multi-Client Support**: Generate unique API keys for different clients
+- **Key Management**: Generate, list, and revoke API keys via CLI
 - **Kubectl Operations**: Execute kubectl commands via A2A protocol
 - **Streaming Support**: Real-time response streaming
 - **Context Isolation**: Each server instance works with a specific Kubernetes context
+- **Flexible Configuration**: Support for single keys, key files, and environment variables
 
 ### A2A Client Example
 
-Using the A2A Python client:
+#### Authenticated Client Usage
+
 ```bash
+# Set your API key (get this from server key generation)
+export K8S_AI_API_KEY="sk-k8sai-dashboard-abc123xyz"
+
 # Test with the included script
 uv run python test_a2a_client.py
 ```
 
-Or using direct HTTP requests (JSON-RPC):
+#### Using A2A Python Client
+```python
+import os
+import httpx
+from a2a.client import ClientFactory, ClientConfig
+from a2a.client.helpers import create_text_message_object
+from a2a.types import Role
+
+# Set up authentication
+api_key = os.environ.get('K8S_AI_API_KEY')
+auth_headers = {"Authorization": f"Bearer {api_key}"}
+
+# Create authenticated client
+async with httpx.AsyncClient(headers=auth_headers) as http_client:
+    config = ClientConfig(httpx_client=http_client)
+    factory = ClientFactory(config)
+    client = factory.create(agent_card)
+    
+    message = create_text_message_object(Role.user, 'show me all pods')
+    async for event in client.send_message(message):
+        # Handle response events
+        pass
+```
+
+#### Direct HTTP Requests (JSON-RPC)
 ```python
 import requests
 import json
+
+# Include authentication header
+headers = {
+    "Authorization": "Bearer sk-k8sai-dashboard-abc123xyz",
+    "Content-Type": "application/json"
+}
 
 payload = {
     "jsonrpc": "2.0",
@@ -98,7 +188,9 @@ payload = {
     }
 }
 
-response = requests.post('http://localhost:9999/', json=payload).json()
+response = requests.post('http://localhost:9999/', 
+                        json=payload, 
+                        headers=headers).json()
 print(response['result']['parts'][0]['text'])
 ```
 

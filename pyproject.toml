@@ -7,6 +7,10 @@ dependencies = [
     "sh",
     "a2a-sdk[http-server]",
     "uvicorn",
+    "kubernetes>=29.0.0",
+    "pyyaml>=6.0.1",
+    "fastapi>=0.104.0",
+    "structlog>=23.2.0",
 ]
 
 [project.scripts]

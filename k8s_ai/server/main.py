@@ -1,15 +1,19 @@
-"""A2A server interface for k8s-ai."""
+"""A2A server interface for k8s-ai with session-based cluster management."""
 
 import argparse
 import sys
 import os
 import json
 import secrets
+import asyncio
+import logging
 from datetime import datetime
 
 import uvicorn
 from starlette.requests import Request
 from starlette.responses import JSONResponse
+from starlette.applications import Starlette
+from starlette.routing import Route, Mount
 from a2a.server.apps import A2AStarletteApplication
 from a2a.server.request_handlers import DefaultRequestHandler
 from a2a.server.tasks import InMemoryTaskStore
@@ -19,7 +23,11 @@ from a2a.types import (
     AgentSkill,
 )
 
-from .executor import K8sAgentExecutor
+from .diagnostic_executor import K8sDiagnosticExecutor
+from ..admin.admin_api import create_admin_app
+from ..utils.cluster_sessions import session_manager
+
+logger = logging.getLogger(__name__)
 
 
 class ApiKeyManager:
@@ -154,11 +162,12 @@ def create_auth_middleware(api_key_manager: ApiKeyManager):
 
 def main():
     """Main A2A server entry point."""
-    parser = argparse.ArgumentParser(description='k8s-ai A2A Server')
-    parser.add_argument('--context', '-c', required=True, help='Kubernetes context to use')
+    parser = argparse.ArgumentParser(description='k8s-ai A2A Server with Session-Based Cluster Management')
+    parser.add_argument('--context', '-c', help='Optional default Kubernetes context to use (deprecated - use admin API to register clusters)')
     parser.add_argument('--host', default='0.0.0.0', help='Host to bind to (default: 0.0.0.0)')
     parser.add_argument('--port', type=int, default=9999, help='Port to bind to (default: 9999)')
-    
+    parser.add_argument('--admin-port', type=int, default=9998, help='Admin API port (default: 9998)')
+
     # Authentication arguments
     parser.add_argument('--auth-key', help='Single API key for authentication')
     parser.add_argument('--keys-file', default='keys.json', help='JSON file containing API keys (default: keys.json)')
@@ -166,13 +175,8 @@ def main():
     parser.add_argument('--client-name', help='Name for the client when generating a key')
     parser.add_argument('--list-keys', action='store_true', help='list all active API keys')
     parser.add_argument('--revoke-key', help='Revoke a specific API key')
-    
+
     args = parser.parse_args()
-    
-    if not args.context:
-        print("Error: Kubernetes context is required!")
-        print("Usage: k8s-ai-server --context <kube context>")
-        sys.exit(1)
     
     # Initialize API key manager
     api_key_manager = ApiKeyManager(args.keys_file)
@@ -225,19 +229,17 @@ def main():
                 api_key_manager.add_single_key(key)
         print(f"Loaded {len(env_keys.split(','))} API key(s) from environment")
     
-    # Define kubectl skill
-    kubectl_skill = AgentSkill(
-        id='kubectl_operations',
-        name='Kubernetes Operations',
-        description='Execute kubectl commands and provide Kubernetes cluster insights, troubleshooting, and management',
-        tags=['kubernetes', 'kubectl', 'cluster', 'pods', 'deployments', 'services'],
+    # Define diagnostic skills (read-only operations only)
+    diagnostic_skill = AgentSkill(
+        id='kubernetes_diagnostics',
+        name='Kubernetes Diagnostics',
+        description='Perform read-only Kubernetes cluster diagnostics, troubleshooting, and health analysis with detailed insights',
+        tags=['kubernetes', 'diagnostics', 'troubleshooting', 'monitoring', 'health'],
         examples=[
-            'show me all pods',
-            'what is the status of the cluster?',
-            'describe the nginx deployment', 
-            'get service endpoints',
-            'check node health',
-            'troubleshoot pending pods'
+            'kubernetes_diagnose_issue: session_token=session-abc123, issue_description=pods not starting in default namespace',
+            'kubernetes_resource_health: session_token=session-abc123, resource_type=pod, namespace=default',
+            'kubernetes_analyze_logs: session_token=session-abc123, log_source=cluster-wide, time_range=2h',
+            'kubernetes_fix_recommendations: session_token=session-abc123, issue_type=pending_pods, namespace=default'
         ]
     )
     
@@ -255,43 +257,86 @@ def main():
         }
         security = [{'BearerAuth': []}]
 
+    context_description = f" for context: {args.context}" if args.context else " with session-based cluster management"
     agent_card = AgentCard(
-        name='k8s-ai Agent',
-        description=f'Kubernetes AI assistant with kubectl access for context: {args.context}',
+        name='k8s-ai Diagnostic Agent',
+        description=f'Kubernetes AI diagnostic agent with read-only cluster analysis{context_description}',
         url=f'http://{args.host}:{args.port}/',
-        version='1.0.0',
+        version='2.0.0',
         default_input_modes=['text/plain'],
         default_output_modes=['text/plain'],
         capabilities=AgentCapabilities(streaming=True),
-        skills=[kubectl_skill],
+        skills=[diagnostic_skill],
         supports_authenticated_extended_card=True,
         security_schemes=security_schemes,
         security=security
     )
-    
+
     # Set up request handler
     request_handler = DefaultRequestHandler(
-        agent_executor=K8sAgentExecutor(context=args.context),
+        agent_executor=K8sDiagnosticExecutor(context=args.context),
         task_store=InMemoryTaskStore(),
     )
-    
+
     # Create and configure the A2A application
     a2a_app = A2AStarletteApplication(
         agent_card=agent_card,
         http_handler=request_handler
     )
-    app = a2a_app.build()
-    
-    # Add authentication middleware if we have keys
+    a2a_starlette_app = a2a_app.build()
+
+    # Add authentication middleware to A2A app if we have keys
     if use_auth:
-        app.middleware("http")(create_auth_middleware(api_key_manager))
-    
-    print(f"Starting k8s-ai A2A server on {args.host}:{args.port}")
-    print(f"Using Kubernetes context: {args.context}")
-    print(f"Agent card available at: http://{args.host}:{args.port}/.well-known/agent.json")
-    
-    # Start the server
-    uvicorn.run(app, host=args.host, port=args.port)
+        a2a_starlette_app.middleware("http")(create_auth_middleware(api_key_manager))
+
+    # Create admin API
+    admin_app = create_admin_app()
+
+    # Create main Starlette application with both A2A and Admin APIs
+    routes = [
+        Mount("/", app=a2a_starlette_app),
+    ]
+
+    # Mount admin API on separate port - we'll start it separately
+    main_app = Starlette(routes=routes)
+
+    print(f"Starting k8s-ai A2A Diagnostic Server...")
+    print(f"  • A2A Protocol Server: http://{args.host}:{args.port}/")
+    print(f"  • Admin API Server: http://{args.host}:{args.admin_port}/")
+    if args.context:
+        print(f"  • Default Kubernetes context: {args.context} (deprecated)")
+    else:
+        print(f"  • Using session-based cluster management")
+    print(f"  • Agent card: http://{args.host}:{args.port}/.well-known/agent.json")
+
+    async def start_servers():
+        """Start both A2A and Admin API servers."""
+        # Start admin API server in background
+        admin_config = uvicorn.Config(
+            admin_app,
+            host=args.host,
+            port=args.admin_port,
+            log_level="info"
+        )
+        admin_server = uvicorn.Server(admin_config)
+
+        # Start main A2A server
+        main_config = uvicorn.Config(
+            main_app,
+            host=args.host,
+            port=args.port,
+            log_level="info"
+        )
+        main_server = uvicorn.Server(main_config)
+
+        # Run both servers concurrently
+        await asyncio.gather(
+            admin_server.serve(),
+            main_server.serve()
+        )
+
+    # Run the servers
+    asyncio.run(start_servers())
 
 
 if __name__ == "__main__":

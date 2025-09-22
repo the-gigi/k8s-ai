@@ -1,0 +1,70 @@
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: holmesgpt-readonly
+  namespace: default
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: holmesgpt-readonly
+rules:
+# Core resources - read only for diagnostics
+- apiGroups: [""]
+  resources:
+    - "pods"
+    - "pods/log"
+    - "events"
+    - "nodes"
+    - "services"
+    - "endpoints"
+    - "configmaps"
+    - "persistentvolumes"
+    - "persistentvolumeclaims"
+    - "namespaces"
+  verbs: ["get", "list"]
+
+# Apps resources - read only
+- apiGroups: ["apps"]
+  resources:
+    - "deployments"
+    - "replicasets"
+    - "daemonsets"
+    - "statefulsets"
+  verbs: ["get", "list"]
+
+# Networking resources - read only
+- apiGroups: ["networking.k8s.io"]
+  resources:
+    - "networkpolicies"
+    - "ingresses"
+  verbs: ["get", "list"]
+
+# Metrics (if available)
+- apiGroups: ["metrics.k8s.io"]
+  resources: ["pods", "nodes"]
+  verbs: ["get", "list"]
+
+# Extensions for troubleshooting
+- apiGroups: ["extensions"]
+  resources: ["ingresses"]
+  verbs: ["get", "list"]
+
+# Batch jobs
+- apiGroups: ["batch"]
+  resources: ["jobs", "cronjobs"]
+  verbs: ["get", "list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: holmesgpt-readonly
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: holmesgpt-readonly
+subjects:
+- kind: ServiceAccount
+  name: holmesgpt-readonly
+  namespace: default

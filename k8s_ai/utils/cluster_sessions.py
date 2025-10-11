@@ -10,7 +10,7 @@ from .k8s_client import DynamicKubernetesClient, KubernetesCredentials
 
 
 class ClusterSession:
-    """Represents a registered cluster session."""
+    """Represents a cluster session with temporary credentials."""
 
     def __init__(
         self,
@@ -18,11 +18,13 @@ class ClusterSession:
         cluster_name: str,
         credentials: KubernetesCredentials,
         expires_at: datetime,
+        client_api_key: Optional[str] = None,
     ):
         self.session_token = session_token
         self.cluster_name = cluster_name
         self.credentials = credentials
         self.expires_at = expires_at
+        self.client_api_key = client_api_key  # Track which API key created this session
         self.created_at = datetime.utcnow()
         self._k8s_client: Optional[DynamicKubernetesClient] = None
 
@@ -60,14 +62,15 @@ class ClusterSessionManager:
     def __init__(self):
         self._sessions: dict[str, ClusterSession] = {}
 
-    def register_cluster(
+    def create_session(
         self,
         cluster_name: str,
         kubeconfig_yaml: str,
         context: Optional[str] = None,
         ttl_hours: float = 24.0,
+        client_api_key: Optional[str] = None,
     ) -> str:
-        """Register a cluster and return session token."""
+        """Create a new session with cluster credentials and return session token."""
         # Validate TTL
         if ttl_hours > 168:  # Max 7 days
             raise ValueError("TTL cannot exceed 168 hours (7 days)")
@@ -95,6 +98,7 @@ class ClusterSessionManager:
             cluster_name=cluster_name,
             credentials=credentials,
             expires_at=expires_at,
+            client_api_key=client_api_key,
         )
 
         # Store session
@@ -109,22 +113,28 @@ class ClusterSessionManager:
         """Get session by token."""
         session = self._sessions.get(session_token)
         if session and session.is_expired():
-            self.unregister_cluster(session_token)
+            self.delete_session(session_token)
             return None
         return session
 
-    def unregister_cluster(self, session_token: str) -> bool:
-        """Unregister a cluster session."""
+    def delete_session(self, session_token: str) -> bool:
+        """Delete a cluster session."""
         session = self._sessions.pop(session_token, None)
         if session:
             session.cleanup()
             return True
         return False
 
-    def list_sessions(self) -> list[dict[str, Any]]:
-        """List all active sessions."""
+    def list_sessions(self, client_api_key: Optional[str] = None) -> list[dict[str, Any]]:
+        """List active sessions. If client_api_key provided, only return that client's sessions."""
         self._cleanup_expired_sessions()
-        return [session.to_dict() for session in self._sessions.values()]
+        sessions = self._sessions.values()
+
+        # Filter by client API key if provided
+        if client_api_key:
+            sessions = [s for s in sessions if s.client_api_key == client_api_key]
+
+        return [session.to_dict() for session in sessions]
 
     def _extract_credentials_from_kubeconfig(
         self, kubeconfig: dict[str, Any], context_name: Optional[str] = None
@@ -220,7 +230,7 @@ class ClusterSessionManager:
 
     def _generate_session_token(self) -> str:
         """Generate a secure session token."""
-        return f"holmes-session-{secrets.token_urlsafe(32)}"
+        return f"k8s-ai-session-{secrets.token_urlsafe(32)}"
 
     def _cleanup_expired_sessions(self) -> None:
         """Clean up expired sessions."""

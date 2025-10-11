@@ -289,8 +289,8 @@ def main():
     if use_auth:
         a2a_starlette_app.middleware("http")(create_auth_middleware(api_key_manager))
 
-    # Create admin API
-    admin_app = create_admin_app()
+    # Create admin API with api_key_manager for authentication
+    admin_app = create_admin_app(api_key_manager)
 
     # Create main Starlette application with both A2A and Admin APIs
     routes = [

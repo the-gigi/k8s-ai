@@ -41,16 +41,25 @@ uv run k8s-ai-cli --context kind-k8s-ai
 Run as an A2A server to expose kubectl capabilities to other AI agents:
 
 ```shell
-uv run k8s-ai-server --context <your-kube-context> [--host 0.0.0.0] [--port 9999]
+# Recommended: Session-based access (no --context needed)
+uv run k8s-ai-server [--host 0.0.0.0] [--port 9999]
+
+# Legacy: With default context (deprecated)
+uv run k8s-ai-server --context <your-kube-context>
 ```
+
+**Modern approach:** Clients create sessions via Admin API (see below) instead of relying on server's default context.
 
 Example:
 ```shell
-# Start A2A server on default port 9999 (without authentication)
+# Start A2A server with session-based access (recommended)
+uv run k8s-ai-server
+
+# Start with default context (legacy mode)
 uv run k8s-ai-server --context kind-k8s-ai
 
 # Start on custom host/port
-uv run k8s-ai-server --context kind-k8s-ai --host localhost --port 8080
+uv run k8s-ai-server --host localhost --port 8080
 ```
 
 ### 🔐 Authentication
@@ -60,11 +69,11 @@ The A2A server supports API key authentication for secure access:
 #### Generate API Keys
 ```shell
 # Generate a new API key for a client
-uv run k8s-ai-server --context kind-k8s-ai --generate-key --client-name "dashboard-client"
+uv run k8s-ai-server --generate-key --client-name "dashboard-client"
 # Output: 🔑 Generated API Key for 'dashboard-client': sk-k8sai-dashboard-abc123xyz
 
 # Generate key without client name
-uv run k8s-ai-server --context kind-k8s-ai --generate-key
+uv run k8s-ai-server --generate-key
 ```
 
 #### Manage API Keys
@@ -79,17 +88,17 @@ uv run k8s-ai-server --revoke-key sk-k8sai-dashboard-abc123xyz
 #### Start Server with Authentication
 ```shell
 # Server with generated keys (reads from keys.json)
-uv run k8s-ai-server --context kind-k8s-ai
+uv run k8s-ai-server
 
 # Server with single API key
-uv run k8s-ai-server --context kind-k8s-ai --auth-key "my-secret-key"
+uv run k8s-ai-server --auth-key "my-secret-key"
 
 # Server with environment variable
 export K8S_AI_AUTH_KEYS="key1,key2,key3"
-uv run k8s-ai-server --context kind-k8s-ai
+uv run k8s-ai-server
 
 # Custom keys file location
-uv run k8s-ai-server --context kind-k8s-ai --keys-file /path/to/my-keys.json
+uv run k8s-ai-server --keys-file /path/to/my-keys.json
 ```
 
 #### Server Output Examples
@@ -103,13 +112,29 @@ uv run k8s-ai-server --context kind-k8s-ai --keys-file /path/to/my-keys.json
 🌐 Agent card available at: http://0.0.0.0:9999/.well-known/agent.json
 ```
 
-**With Authentication:**
+**With Authentication (Session-based):**
 ```
-🔒 Authentication enabled with 2 API key(s)
-🚀 Starting k8s-ai A2A server on 0.0.0.0:9999
-☸️ Using Kubernetes context: kind-k8s-ai
-🌐 Agent card available at: http://0.0.0.0:9999/.well-known/agent.json
+Authentication enabled with 4 API key(s)
+Starting k8s-ai A2A Diagnostic Server...
+  • A2A Protocol Server: http://0.0.0.0:9999/
+  • Admin API Server: http://0.0.0.0:9998/
+  • Using session-based cluster management
+  • Agent card: http://0.0.0.0:9999/.well-known/agent.json
+INFO:     Uvicorn running on http://0.0.0.0:9998 (Press CTRL+C to quit)
+INFO:     Uvicorn running on http://0.0.0.0:9999 (Press CTRL+C to quit)
 ```
+
+**With Authentication (Legacy mode with --context):**
+```
+Authentication enabled with 4 API key(s)
+Starting k8s-ai A2A Diagnostic Server...
+  • A2A Protocol Server: http://0.0.0.0:9999/
+  • Admin API Server: http://0.0.0.0:9998/
+  • Default Kubernetes context: kind-k8s-ai (deprecated)
+  • Agent card: http://0.0.0.0:9999/.well-known/agent.json
+```
+
+**Note**: Two servers start - A2A Protocol (9999) and Admin API (9998). Both log their startup, which is normal behavior.
 
 **Key Generation:**
 ```
@@ -127,6 +152,111 @@ uv run k8s-ai-server --context kind-k8s-ai --keys-file /path/to/my-keys.json
 - **Streaming Support**: Real-time response streaming
 - **Context Isolation**: Each server instance works with a specific Kubernetes context
 - **Flexible Configuration**: Support for single keys, key files, and environment variables
+
+### Admin API (Port 9998)
+
+When running the A2A server, an **admin API** is automatically started on port 9998 (configurable with `--admin-port`). This API enables **session-based cluster access** - clients provide their kubeconfig to create temporary sessions.
+
+#### Admin API Endpoints
+
+**POST `/sessions`** - Create a new cluster session
+```bash
+curl -X POST http://localhost:9998/sessions \
+  -H "Authorization: Bearer $A2A_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "cluster_name": "production-east",
+    "kubeconfig": "<full kubeconfig YAML>",
+    "ttl_hours": 24.0
+  }'
+
+# Returns:
+{
+  "success": true,
+  "session_token": "k8s-ai-session-abc123...",
+  "cluster_name": "production-east",
+  "api_server": "https://prod-east.example.com:6443",
+  "namespace": "default",
+  "connectivity_status": "connected",
+  "expires_at": "2024-10-12T10:00:00Z"
+}
+```
+
+**GET `/sessions`** - List all active sessions (admin only)
+```bash
+curl http://localhost:9998/sessions \
+  -H "Authorization: Bearer $A2A_API_KEY"
+
+# Returns:
+{
+  "total_sessions": 2,
+  "sessions": [
+    {
+      "session_token": "k8s-ai-session-abc123...",
+      "cluster_name": "production-east",
+      "expires_at": "2024-10-12T10:00:00Z"
+    },
+    ...
+  ]
+}
+```
+
+**GET `/sessions/mine`** - List only your sessions
+```bash
+curl http://localhost:9998/sessions/mine \
+  -H "Authorization: Bearer $A2A_API_KEY"
+```
+
+**DELETE `/sessions/{session_token}`** - Delete a session
+```bash
+curl -X DELETE http://localhost:9998/sessions/k8s-ai-session-abc123... \
+  -H "Authorization: Bearer $A2A_API_KEY"
+```
+
+#### Creating Sessions from Client Code
+
+```python
+import httpx
+import subprocess
+
+# Create a cluster session
+async with httpx.AsyncClient() as client:
+    # Get kubeconfig from your local kubectl config
+    kubeconfig = subprocess.check_output(
+        ["kubectl", "config", "view", "--context=prod-cluster", "--minify", "--raw"],
+        text=True
+    )
+
+    # Create session via Admin API
+    response = await client.post(
+        "http://localhost:9998/sessions",
+        headers={"Authorization": f"Bearer {admin_api_key}"},
+        json={
+            "cluster_name": "prod-cluster",
+            "kubeconfig": kubeconfig,
+            "ttl_hours": 24.0
+        }
+    )
+
+    # Get session token for A2A operations
+    session_token = response.json()["session_token"]
+
+    # Use session_token in A2A skill calls
+    skill_call = f"kubernetes_diagnose_issue: session_token={session_token}, issue_description=..."
+
+    # Clean up session when done
+    await client.delete(
+        f"http://localhost:9998/sessions/{session_token}",
+        headers={"Authorization": f"Bearer {admin_api_key}"}
+    )
+```
+
+**How Sessions Work:**
+- **Client provides kubeconfig**: You send your cluster credentials to the server
+- **Temporary storage**: Server stores credentials in memory with TTL
+- **Multiple sessions per cluster**: Different agents can have separate sessions for the same cluster
+- **Client-scoped**: Each session is tied to the API key that created it
+- **Auto-expiration**: Sessions automatically expire after TTL
 
 ### A2A Client Example
 

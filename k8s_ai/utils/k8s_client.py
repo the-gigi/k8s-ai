@@ -100,9 +100,14 @@ class DynamicKubernetesClient:
         return client.NetworkingV1Api(self.get_api_client())
 
     def list_pods(self, namespace: str | None = None) -> client.V1PodList:
-        """List pods in namespace."""
+        """List pods in namespace or across all namespaces if namespace='all'."""
         namespace = namespace or self.credentials.namespace
         core_v1 = self.get_core_v1_api()
+
+        # Handle "all" as a special case to list across all namespaces
+        if namespace and namespace.lower() == "all":
+            return core_v1.list_pod_for_all_namespaces()
+
         return core_v1.list_namespaced_pod(namespace)
 
     def get_pod_logs(

@@ -265,7 +265,7 @@ def main():
         version='2.0.0',
         default_input_modes=['text/plain'],
         default_output_modes=['text/plain'],
-        capabilities=AgentCapabilities(streaming=True),
+        capabilities=AgentCapabilities(streaming=False),
         skills=[diagnostic_skill],
         supports_authenticated_extended_card=True,
         security_schemes=security_schemes,

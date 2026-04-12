@@ -9,7 +9,7 @@ dependencies = [
     "uvicorn",
     "kubernetes>=29.0.0",
     "pyyaml>=6.0.3",
-    "fastapi>=0.104.0",
+    "fastapi>=0.135.3",
     "structlog>=25.5.0",
 ]
 
